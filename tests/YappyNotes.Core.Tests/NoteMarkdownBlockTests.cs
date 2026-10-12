@@ -41,6 +41,19 @@ public class NoteMarkdownBlockTests
     }
 
     [Fact]
+    public void Parse_ClosedFence_BecomesOneCodeBlock()
+    {
+        var blocks = NoteMarkdown.Parse("before\n```\n  one\n  two\n```\nafter");
+
+        Assert.Equal(
+            [MarkdownBlockKind.Paragraph, MarkdownBlockKind.CodeFence, MarkdownBlockKind.Paragraph],
+            blocks.Select(block => block.Kind));
+        Assert.Equal("before", TextOf(blocks[0]));
+        Assert.Equal("  one\n  two\n", TextOf(blocks[1]));
+        Assert.Equal("after", TextOf(blocks[2]));
+    }
+
+    [Fact]
     public void Parse_AnEmptyLineBetweenTwo_IsKeptAsABlankBlock()
     {
         var blocks = NoteMarkdown.Parse("milk\n\nbread");
