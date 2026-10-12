@@ -65,7 +65,7 @@ public sealed record MarkdownBlock(
 
 /// <summary>
 /// The small piece of Markdown a note understands: headings, bullets, checklists,
-/// bold, italic, code and links.
+/// bold, italic, inline and fenced code, and links.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -75,10 +75,11 @@ public sealed record MarkdownBlock(
 /// only decides how that text is drawn.
 /// </para>
 /// <para>
-/// Two departures from Markdown proper, both for a sticky note. Every line is its
-/// own block - Markdown joins neighbouring lines into one paragraph, which on a
-/// note reads as the app eating your line breaks. And nothing is ever an error:
-/// anything that does not parse is shown as the characters that were typed.
+/// Two departures from Markdown proper, both for a sticky note. Outside fenced
+/// code, every line is its own block - Markdown joins neighbouring lines into
+/// one paragraph, which on a note reads as the app eating your line breaks.
+/// And nothing is ever an error: anything that does not parse is shown as the
+/// characters that were typed.
 /// </para>
 /// <para>
 /// A subset on purpose. Tables, images, numbered lists and HTML are not coming;
