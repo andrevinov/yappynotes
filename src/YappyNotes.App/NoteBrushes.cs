@@ -19,6 +19,8 @@ public sealed class NoteBrushes : IValueConverter
 
     public static NoteBrushes Edge { get; } = new() { _darker = true };
 
+    public static NoteBrushes CodePaper { get; } = new() { _codePaper = true };
+
     private static readonly Dictionary<NoteColor, Color> Papers = new()
     {
         [NoteColor.Yellow] = Color.FromRgb(0xFF, 0xF3, 0x9A),
@@ -30,6 +32,7 @@ public sealed class NoteBrushes : IValueConverter
     };
 
     private bool _darker;
+    private bool _codePaper;
 
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {

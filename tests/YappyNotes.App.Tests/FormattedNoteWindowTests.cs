@@ -5,8 +5,10 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Microsoft.Extensions.Time.Testing;
 using YappyNotes.App.Views;
 using YappyNotes.Core;
@@ -122,6 +124,56 @@ public class FormattedNoteWindowTests
         var window = OpenWith("# Today\nmilk");
 
         Assert.True(Line(window, 0).FontSize > Line(window, 1).FontSize);
+    }
+
+    [AvaloniaFact]
+    public void FormattedNote_AFencedBlock_ShowsCodeWithoutFences()
+    {
+        var window = OpenWith("before\n```cs\n  first();\n  second();\n```\nafter");
+
+        var code = Assert.Single(Formatted(window).GetVisualDescendants().OfType<TextBlock>(),
+            text => text.Tag is NoteLine { Block.Kind: MarkdownBlockKind.CodeFence });
+        var drawn = !string.IsNullOrEmpty(code.Text) ? code.Text : DrawnText(code);
+
+        Assert.Equal("  first();\n  second();\n", drawn);
+    }
+
+    [AvaloniaFact]
+    public void FormattedNote_AFenceWithLanguage_ShowsItsLabel()
+    {
+        var window = OpenWith("```csharp\nvar x = 1;\n```");
+
+        Assert.Contains(Formatted(window).GetVisualDescendants().OfType<TextBlock>(),
+            text => text.Text == "csharp");
+    }
+
+    [AvaloniaFact]
+    public async Task Copy_OnAFencedBlock_CopiesOnlyTheLiteralCode()
+    {
+        const string code = "  x = 1;\r\n\treturn x;\r\n";
+        var window = OpenWith("before\n```csharp\r\n" + code + "```\nafter");
+        var clipboard = window.Clipboard!;
+        await clipboard.SetTextAsync("previous clipboard text");
+        var copy = Assert.Single(Formatted(window).GetVisualDescendants().OfType<Button>(),
+            button => button.Content is "Copy" or TextBlock { Text: "Copy" });
+        var centre = copy.TranslatePoint(new Point(copy.Bounds.Width / 2, copy.Bounds.Height / 2), window)!.Value;
+
+        window.MouseDown(centre, MouseButton.Left);
+        window.MouseUp(centre, MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(code, await clipboard.TryGetTextAsync());
+    }
+
+    [AvaloniaFact]
+    public void Copy_OnAnEmptyFencedBlock_IsDisabled()
+    {
+        var window = OpenWith("```\n```");
+
+        var copy = Assert.Single(Formatted(window).GetVisualDescendants().OfType<Button>(),
+            button => button.Content is "Copy" or TextBlock { Text: "Copy" });
+
+        Assert.False(copy.IsEnabled);
     }
 
     [AvaloniaFact]
