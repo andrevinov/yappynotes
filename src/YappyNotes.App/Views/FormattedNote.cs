@@ -5,6 +5,7 @@ using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Media;
+using Avalonia.VisualTree;
 using YappyNotes.App;
 using YappyNotes.Core;
 using YappyNotes.ViewModels;
@@ -106,16 +107,20 @@ public sealed class FormattedNote : StackPanel
             return;
         }
 
-        var position = e.GetPosition(this);
-
-        foreach (var child in Children)
+        foreach (var text in this.GetVisualDescendants().OfType<TextBlock>())
         {
-            if (child is not TextBlock { Tag: NoteLine line } text || !text.Bounds.Contains(position))
+            if (text.Tag is not NoteLine line)
             {
                 continue;
             }
 
-            var hit = text.TextLayout.HitTestPoint(position - text.Bounds.Position);
+            var position = e.GetPosition(text);
+            if (!new Rect(text.Bounds.Size).Contains(position))
+            {
+                continue;
+            }
+
+            var hit = text.TextLayout.HitTestPoint(position);
 
             // Past the end of the line's text there is no character under the
             // pointer, so no box or link either: it is a press at the line's end.
