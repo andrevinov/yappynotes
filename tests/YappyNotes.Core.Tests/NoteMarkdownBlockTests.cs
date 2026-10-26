@@ -41,6 +41,26 @@ public class NoteMarkdownBlockTests
     }
 
     [Fact]
+    public void Parse_StandaloneLocalImage_ProducesImageBlock()
+    {
+        const string reference = "![diagrama](file:///home/andre/diagram.png)";
+        var content = $"antes\n{reference}\ndepois";
+
+        var blocks = NoteMarkdown.Parse(content);
+
+        Assert.Equal(3, blocks.Count);
+        Assert.Equal(MarkdownBlockKind.Paragraph, blocks[0].Kind);
+        Assert.Equal("antes", TextOf(blocks[0]));
+        Assert.Equal(MarkdownBlockKind.Image, blocks[1].Kind);
+        Assert.Equal("diagrama", blocks[1].ImageDescription);
+        Assert.Equal(new Uri("file:///home/andre/diagram.png"), blocks[1].ImageUri);
+        Assert.Equal(content.IndexOf(reference, StringComparison.Ordinal), blocks[1].SourceStart);
+        Assert.Equal(reference.Length, blocks[1].SourceLength);
+        Assert.Equal(MarkdownBlockKind.Paragraph, blocks[2].Kind);
+        Assert.Equal("depois", TextOf(blocks[2]));
+    }
+
+    [Fact]
     public void Parse_AnEmptyLineBetweenTwo_IsKeptAsABlankBlock()
     {
         var blocks = NoteMarkdown.Parse("milk\n\nbread");
