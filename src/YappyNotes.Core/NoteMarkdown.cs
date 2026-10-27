@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace YappyNotes.Core;
 
 /// <summary>What a line of a note is.</summary>
@@ -199,8 +201,36 @@ public static class NoteMarkdown
             return false;
         }
 
-        var descriptionEnd = line.IndexOf("](", StringComparison.Ordinal);
-        if (descriptionEnd < 2)
+        var decodedDescription = new StringBuilder();
+        var descriptionEnd = -1;
+        for (var i = 2; i < line.Length; i++)
+        {
+            if (line[i] == '\\')
+            {
+                if (i + 1 >= line.Length || line[i + 1] is not ('\\' or ']'))
+                {
+                    return false;
+                }
+
+                decodedDescription.Append(line[++i]);
+            }
+            else if (line[i] == ']')
+            {
+                if (i + 1 >= line.Length || line[i + 1] != '(')
+                {
+                    return false;
+                }
+
+                descriptionEnd = i;
+                break;
+            }
+            else
+            {
+                decodedDescription.Append(line[i]);
+            }
+        }
+
+        if (descriptionEnd < 0)
         {
             return false;
         }
@@ -220,7 +250,7 @@ public static class NoteMarkdown
             return false;
         }
 
-        description = line[2..descriptionEnd].ToString();
+        description = decodedDescription.ToString();
         imageUri = uri;
         return true;
     }
@@ -262,6 +292,20 @@ public static class NoteMarkdown
         while (i < end)
         {
             var c = content[i];
+
+            // An unsupported image reference stays literal, including an http:
+            // destination that could otherwise become a labelled or bare link.
+            if (c == '!' && i + 1 < end && content[i + 1] == '[')
+            {
+                var imageLabelEnd = content.AsSpan(i + 2, end - i - 2).IndexOf("](", StringComparison.Ordinal);
+                if (imageLabelEnd >= 0)
+                {
+                    var destinationStart = i + 2 + imageLabelEnd + 2;
+                    var imageEnd = content.IndexOf(')', destinationStart, end - destinationStart);
+                    i = imageEnd < 0 ? end : imageEnd + 1;
+                    continue;
+                }
+            }
 
             if (addresses.TryGetValue(i, out var address))
             {
