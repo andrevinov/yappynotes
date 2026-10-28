@@ -173,7 +173,8 @@ public sealed class WindowManager : IWindowManager
             note, _notes, _autoSave, this,
             TimeProvider.System,
             new AvaloniaUiDispatcher(),
-            new AvaloniaLinkLauncher(() => _open.GetValueOrDefault(note.Id)));
+            new AvaloniaLinkLauncher(() => _open.GetValueOrDefault(note.Id)),
+            new AvaloniaImageFilePicker(() => _open.GetValueOrDefault(note.Id)));
         _viewModels[noteId] = viewModel;
         return viewModel;
     }

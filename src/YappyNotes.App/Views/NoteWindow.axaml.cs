@@ -15,6 +15,8 @@ namespace YappyNotes.App.Views;
 public partial class NoteWindow : Window
 {
     private NoteViewModel? _note;
+    private (bool WasEditing, int Start, int End) _imageMenuSelection;
+    private bool _imageMenuCaptured;
 
     /// <summary>
     /// True while the window is applying the view-model's geometry to itself.
@@ -29,6 +31,30 @@ public partial class NoteWindow : Window
     public NoteWindow()
     {
         AvaloniaXamlLoader.Load(this);
+
+        var chrome = this.FindControl<Border>("NoteChrome");
+        chrome?.AddHandler(PointerPressedEvent, (_, e) =>
+        {
+            if (!e.GetCurrentPoint(chrome).Properties.IsRightButtonPressed)
+            {
+                return;
+            }
+
+            CaptureImageMenuSelection();
+            _imageMenuCaptured = true;
+        }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
+        if (chrome?.ContextMenu is { } menu)
+        {
+            menu.Opening += (_, _) =>
+            {
+                if (!_imageMenuCaptured)
+                {
+                    CaptureImageMenuSelection();
+                }
+
+                _imageMenuCaptured = false;
+            };
+        }
 
         var header = this.FindControl<Grid>("Header");
         if (header is not null)
@@ -198,6 +224,52 @@ public partial class NoteWindow : Window
             e.Handled = true;
             body.CaretIndex = caret;
         }
+    }
+
+    private async void OnAddImageClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (_note is not { } note)
+        {
+            return;
+        }
+
+        var (wasEditing, start, end) = _imageMenuSelection;
+        MarkdownEdit? edit = null;
+        try
+        {
+            edit = await note.AddImageAsync(wasEditing ? start : null, wasEditing ? end : null);
+        }
+        catch (Exception)
+        {
+            // Picker failure leaves the content and selection as they were.
+        }
+
+        if (!wasEditing || _note != note)
+        {
+            return;
+        }
+
+        var caret = edit?.SelectionStart ?? start;
+        note.BeginEditingAt(caret);
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            var body = this.FindControl<TextBox>("Body");
+            if (body is null || _note != note)
+            {
+                return;
+            }
+
+            body.Focus();
+            body.CaretIndex = edit?.SelectionEnd ?? end;
+            body.SelectionStart = edit?.SelectionStart ?? start;
+            body.SelectionEnd = edit?.SelectionEnd ?? end;
+        });
+    }
+
+    private void CaptureImageMenuSelection()
+    {
+        var body = this.FindControl<TextBox>("Body");
+        _imageMenuSelection = (_note?.IsEditing == true, body?.SelectionStart ?? 0, body?.SelectionEnd ?? 0);
     }
 
     /// <summary>

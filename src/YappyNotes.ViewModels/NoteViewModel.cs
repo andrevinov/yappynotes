@@ -31,6 +31,7 @@ public sealed partial class NoteViewModel : ObservableObject
     private readonly TimeProvider _timeProvider;
     private readonly IUiDispatcher _ui;
     private readonly ILinkLauncher _links;
+    private readonly IImageFilePicker? _images;
 
     /// <param name="timeProvider">
     /// Used by the timer, if the note has one. Defaults to the system clock so
@@ -48,7 +49,8 @@ public sealed partial class NoteViewModel : ObservableObject
         IWindowManager windows,
         TimeProvider? timeProvider = null,
         IUiDispatcher? ui = null,
-        ILinkLauncher? links = null)
+        ILinkLauncher? links = null,
+        IImageFilePicker? images = null)
     {
         ArgumentNullException.ThrowIfNull(note);
         ArgumentNullException.ThrowIfNull(notes);
@@ -62,6 +64,7 @@ public sealed partial class NoteViewModel : ObservableObject
         _timeProvider = timeProvider ?? TimeProvider.System;
         _ui = ui ?? new ImmediateUiDispatcher();
         _links = links ?? new NoLinkLauncher();
+        _images = images;
 
         AttachTimer();
         ScanForLinks();
@@ -183,7 +186,36 @@ public sealed partial class NoteViewModel : ObservableObject
     /// <summary>Starts editing with the caret after the last character - a press below the text.</summary>
     public void BeginEditingAtEnd() => BeginEditing(_note.Content.Length);
 
+    /// <summary>Resumes editing at a position after a note menu action.</summary>
+    public void BeginEditingAt(int caret) => BeginEditing(caret);
+
     public void EndEditing() => SetEditing(false);
+
+    /// <summary>
+    /// Chooses an image and inserts its reference at the editor selection, or at
+    /// the end of a formatted note. The content setter handles parse and autosave.
+    /// </summary>
+    /// <returns>The edit to restore in the editor, or null on cancellation or an unsupported file.</returns>
+    public async Task<MarkdownEdit?> AddImageAsync(int? selectionStart = null, int? selectionEnd = null)
+    {
+        if (_images is null || await _images.PickAsync() is not { } file)
+        {
+            return null;
+        }
+
+        var start = Math.Clamp(selectionStart ?? Content.Length, 0, Content.Length);
+        var end = Math.Clamp(selectionEnd ?? start, 0, Content.Length);
+        (start, end) = (Math.Min(start, end), Math.Max(start, end));
+        var withoutSelection = Content.Remove(start, end - start);
+        var edit = NoteImageReference.Insert(withoutSelection, start, file);
+        if (edit.Content == withoutSelection)
+        {
+            return null;
+        }
+
+        Content = edit.Content;
+        return edit;
+    }
 
     /// <summary>Whether any line of the note is a to-do.</summary>
     public bool HasTodos => Lines.Any(line => line.Block.Kind == MarkdownBlockKind.Task);
