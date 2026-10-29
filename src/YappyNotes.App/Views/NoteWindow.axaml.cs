@@ -15,6 +15,7 @@ namespace YappyNotes.App.Views;
 public partial class NoteWindow : Window
 {
     private NoteViewModel? _note;
+    private NoteImageSession? _imageSession;
     private (bool WasEditing, int Start, int End) _imageMenuSelection;
     private bool _imageMenuCaptured;
 
@@ -75,7 +76,8 @@ public partial class NoteWindow : Window
         }
 
         // Presses on the paper around the text: a line would have handled its own.
-        this.FindControl<ScrollViewer>("FormattedScroll")?.AddHandler(
+        var formattedScroll = this.FindControl<ScrollViewer>("FormattedScroll");
+        formattedScroll?.AddHandler(
             PointerPressedEvent,
             (_, e) =>
             {
@@ -85,6 +87,22 @@ public partial class NoteWindow : Window
                     _note?.BeginEditingAtEnd();
                 }
             });
+        if (formattedScroll is not null)
+        {
+            formattedScroll.PropertyChanged += (_, change) =>
+            {
+                if (change.Property == BoundsProperty)
+                {
+                    RefreshImages();
+                }
+            };
+        }
+
+        Closed += (_, _) =>
+        {
+            _imageSession?.Dispose();
+            _imageSession = null;
+        };
 
         var body = this.FindControl<TextBox>("Body");
         if (body is not null)
@@ -140,6 +158,8 @@ public partial class NoteWindow : Window
         }
 
         _note = note;
+        _imageSession?.Dispose();
+        _imageSession = new NoteImageSession(new LocalImageLoader());
         DataContext = note;
         note.PropertyChanged += OnNoteChanged;
 
@@ -156,6 +176,23 @@ public partial class NoteWindow : Window
         {
             _applyingGeometry = false;
         }
+
+        RefreshImages();
+    }
+
+    internal NoteImageSession? ImageSession => _imageSession;
+
+    private void RefreshImages()
+    {
+        var scroll = this.FindControl<ScrollViewer>("FormattedScroll");
+        if (_note is null || _imageSession is null || scroll is null
+            || scroll.Bounds.Width <= 0 || scroll.Bounds.Height <= 0)
+        {
+            return;
+        }
+
+        _imageSession.Update(_note.Lines,
+            new Size(Math.Max(1, scroll.Bounds.Width - 16), Math.Max(1, scroll.Bounds.Height - 16)));
     }
 
     /// <summary>
@@ -326,6 +363,7 @@ public partial class NoteWindow : Window
     protected override void OnOpened(EventArgs e)
     {
         base.OnOpened(e);
+        RefreshImages();
 
         // A new note should be ready to type into without a click.
         this.FindControl<TextBox>("Body")?.Focus();
@@ -379,6 +417,11 @@ public partial class NoteWindow : Window
     /// </summary>
     private void OnNoteChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(NoteViewModel.Lines))
+        {
+            RefreshImages();
+        }
+
         if (e.PropertyName == nameof(NoteViewModel.IsAddingTodo) && _note is { IsAddingTodo: true })
         {
             // The new line has only just become visible, and a hidden control cannot

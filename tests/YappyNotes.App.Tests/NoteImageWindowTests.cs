@@ -125,6 +125,52 @@ public class NoteImageWindowTests
         Assert.Equal(MarkdownBlockKind.Image, note.Lines[1].Block.Kind);
     }
 
+    [AvaloniaFact]
+    public async Task NoteWindow_ImageReferenceChanges_ReleasesOldBitmap()
+    {
+        var uri = new Uri(Path.Combine(AppContext.BaseDirectory, "Fixtures", "Images", "sample.png"));
+        var window = OpenWith($"![image]({uri.AbsoluteUri})", null);
+        var note = (NoteViewModel)window.DataContext!;
+        var session = window.ImageSession!;
+        var loaded = await WaitForImageAsync(session, uri);
+
+        note.Content = "other text";
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Null(session.Get(uri));
+        Assert.True(loaded.IsDisposed);
+    }
+
+    [AvaloniaFact]
+    public async Task NoteWindow_WhenClosed_ReleasesLoadedBitmap()
+    {
+        var uri = new Uri(Path.Combine(AppContext.BaseDirectory, "Fixtures", "Images", "sample.png"));
+        var window = OpenWith($"![image]({uri.AbsoluteUri})", null);
+        var session = window.ImageSession!;
+        var loaded = await WaitForImageAsync(session, uri);
+
+        window.Close();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.True(loaded.IsDisposed);
+    }
+
+    private static async Task<ImageLoadResult> WaitForImageAsync(NoteImageSession session, Uri uri)
+    {
+        for (var attempt = 0; attempt < 100; attempt++)
+        {
+            Dispatcher.UIThread.RunJobs();
+            if (session.Get(uri) is { Status: ImageLoadStatus.Ready } loaded)
+            {
+                return loaded;
+            }
+
+            await Task.Delay(10);
+        }
+
+        throw new TimeoutException("the image loader did not publish the bitmap");
+    }
+
     private sealed class ImagePicker(Uri? picked) : IImageFilePicker
     {
         public Task<Uri?> PickAsync() => Task.FromResult(picked);
