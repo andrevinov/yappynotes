@@ -92,6 +92,32 @@ public class NoteImageTests
         Assert.Equal(0, _counting.Updates);
     }
 
+    [Fact]
+    public async Task ShowsLinkBar_WithOnlyLocalImage_IsFalse()
+    {
+        var note = await OpenAsync("![diagram](file:///tmp/diagram.png)", new ImagePicker(null));
+
+        note.BeginEditingAtEnd();
+
+        Assert.False(note.HasLinks);
+        Assert.False(note.ShowsLinkBar);
+    }
+
+    [Fact]
+    public async Task PressAsync_OnImage_DoesNotOpenLink()
+    {
+        var links = new FakeLinkLauncher();
+        var stored = await _notes.CreateAsync(TestContext.Current.CancellationToken);
+        stored.Content = "![diagram](file:///tmp/diagram.png)";
+        var note = new NoteViewModel(stored, _notes, _autoSave, new FakeWindowManager(), links: links);
+
+        await note.PressAsync(Assert.Single(note.Lines), renderedIndex: 5);
+
+        Assert.True(note.IsEditing);
+        Assert.Empty(links.Opened);
+        Assert.Equal(stored.Content, note.Content);
+    }
+
     private sealed class ImagePicker(Uri? chosen) : IImageFilePicker
     {
         public Task<Uri?> PickAsync() => Task.FromResult(chosen);

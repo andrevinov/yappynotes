@@ -72,6 +72,15 @@ public class NoteImageRenderingTests
         Dispatcher.UIThread.RunJobs();
     }
 
+    private static void ClickText(NoteWindow window, TextBlock line, int index)
+    {
+        var hit = line.TextLayout.HitTestTextPosition(index);
+        var inWindow = line.TranslatePoint(new Point(hit.X + hit.Width / 4, hit.Y + hit.Height / 2), window)!.Value;
+        window.MouseDown(inWindow, MouseButton.Left);
+        window.MouseUp(inWindow, MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
+    }
+
     [AvaloniaTheory]
     [InlineData(320, 200, 1000, 1000, 320, 200)]
     [InlineData(320, 200, 160, 100, 160, 100)]
@@ -256,5 +265,32 @@ public class NoteImageRenderingTests
         Assert.IsType<Image>(ImageRow(window).Child);
         Assert.True(previousResult.IsDisposed);
         Assert.Null(window.ImageSession!.Get(old));
+    }
+
+    [AvaloniaFact]
+    public async Task FormattedNote_ExistingLinksAndTasks_AreUnaffectedByImage()
+    {
+        var content = $"- [ ] milk\n{Reference(Sample)}\nsee [the docs](https://example.com/docs)\n- [x] bread";
+        var window = Open(content);
+        await WaitForImage(window, Sample);
+        var note = (NoteViewModel)window.DataContext!;
+        var rows = Formatted(window).Children.Where(control => control.Tag is NoteLine).ToList();
+
+        Assert.Equal([typeof(TextBlock), typeof(Border), typeof(TextBlock), typeof(TextBlock)],
+            rows.Select(control => control.GetType()));
+        Assert.IsType<Image>(ImageRow(window).Child);
+
+        ClickText(window, Assert.IsType<TextBlock>(rows[0]), 0);
+        Assert.Equal($"- [x] milk\n{Reference(Sample)}\nsee [the docs](https://example.com/docs)\n- [x] bread", note.Content);
+        Assert.IsType<Image>(ImageRow(window).Child);
+
+        var link = Formatted(window).Children.OfType<TextBlock>()
+            .Single(control => control.Tag is NoteLine { Block.Kind: MarkdownBlockKind.Paragraph });
+        ClickText(window, link, "see th".Length);
+
+        Assert.Equal([new Uri("https://example.com/docs")], _links.Opened);
+        Assert.False(note.IsEditing);
+        Assert.Equal(Reference(Sample), note.Content.Split('\n')[1]);
+        Assert.IsType<Image>(ImageRow(window).Child);
     }
 }
