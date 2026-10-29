@@ -118,6 +118,37 @@ public class NoteImageTests
         Assert.Equal(stored.Content, note.Content);
     }
 
+    [Fact]
+    public async Task PasteImage_AfterSuccessfulStore_InsertsReferenceAtSelection()
+    {
+        var note = await OpenAsync("before selected after", new ImagePicker(null));
+        var uri = new Uri("file:///tmp/managed%20image.png");
+
+        var edit = note.PasteSavedImage(uri, 7, 15);
+        _clock.Advance(TimeSpan.FromMilliseconds(750));
+        await _autoSave.WhenIdleAsync();
+
+        Assert.NotNull(edit);
+        Assert.Equal("before \n![imagem](file:///tmp/managed%20image.png)\n after", note.Content);
+        Assert.Equal(note.Content.IndexOf(" after", StringComparison.Ordinal), edit.SelectionStart);
+        Assert.Equal(MarkdownBlockKind.Image, note.Lines[1].Block.Kind);
+        Assert.Equal(1, _counting.Updates);
+    }
+
+    [Fact]
+    public async Task PasteImage_WithInvalidSavedUri_KeepsSelectionAndContent()
+    {
+        var note = await OpenAsync("before selected after", new ImagePicker(null));
+
+        var edit = note.PasteSavedImage(new Uri("https://example.com/image.png"), 7, 15);
+        _clock.Advance(TimeSpan.FromMilliseconds(750));
+        await _autoSave.WhenIdleAsync();
+
+        Assert.Null(edit);
+        Assert.Equal("before selected after", note.Content);
+        Assert.Equal(0, _counting.Updates);
+    }
+
     private sealed class ImagePicker(Uri? chosen) : IImageFilePicker
     {
         public Task<Uri?> PickAsync() => Task.FromResult(chosen);

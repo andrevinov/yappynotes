@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Markup.Xaml;
 using YappyNotes.Core;
 using YappyNotes.ViewModels;
@@ -18,6 +19,9 @@ public partial class NoteWindow : Window
     private NoteImageSession? _imageSession;
     private (bool WasEditing, int Start, int End) _imageMenuSelection;
     private bool _imageMenuCaptured;
+    private bool _pasteInProgress;
+
+    internal PastedImageStore? ImageStore { get; set; }
 
     /// <summary>
     /// True while the window is applying the view-model's geometry to itself.
@@ -242,6 +246,16 @@ public partial class NoteWindow : Window
             return;
         }
 
+        if (e.Key == Key.V && e.KeyModifiers == KeyModifiers.Control && ImageStore is not null
+            && _note is not null && !(_note.ShowsEditor && this.FindControl<TextBox>("Body")?.IsFocused == true)
+            && this.FindControl<TextBox>("TitleBox")?.IsFocused != true
+            && this.FindControl<TextBox>("TodoAdder")?.IsFocused != true)
+        {
+            e.Handled = true;
+            _ = PasteFromClipboardAsync(null);
+            return;
+        }
+
         if (e.KeyModifiers == KeyModifiers.Control && e.Key is Key.B or Key.I
             && _note is { IsEditing: true } typing
             && this.FindControl<TextBox>("Body") is { IsFocused: true } body)
@@ -283,6 +297,14 @@ public partial class NoteWindow : Window
     /// </summary>
     private void OnBodyKeyDown(object? sender, KeyEventArgs e)
     {
+        if (e.Key == Key.V && e.KeyModifiers == KeyModifiers.Control
+            && sender is TextBox pasteTarget && ImageStore is not null)
+        {
+            e.Handled = true;
+            _ = PasteFromClipboardAsync(pasteTarget);
+            return;
+        }
+
         if (e.Key != Key.Enter || e.KeyModifiers != KeyModifiers.None
             || sender is not TextBox body || _note is null || body.SelectionStart != body.SelectionEnd)
         {
@@ -293,6 +315,63 @@ public partial class NoteWindow : Window
         {
             e.Handled = true;
             body.CaretIndex = caret;
+        }
+    }
+
+    private async Task PasteFromClipboardAsync(TextBox? editor)
+    {
+        if (_pasteInProgress || _note is not { } note || ImageStore is not { } store)
+        {
+            return;
+        }
+
+        _pasteInProgress = true;
+        var start = editor?.SelectionStart;
+        var end = editor?.SelectionEnd;
+        var original = note.Content;
+        var failure = this.FindControl<TextBlock>("PasteFailure");
+        if (failure is not null) failure.IsVisible = false;
+
+        try
+        {
+            using var bitmap = await Clipboard!.TryGetBitmapAsync();
+            if (bitmap is null)
+            {
+                if (editor is not null && _note == note) editor.Paste();
+                return;
+            }
+
+            var uri = await store.SaveAsync(bitmap);
+            if (_note != note || note.Content != original)
+            {
+                return;
+            }
+
+            var edit = note.PasteSavedImage(uri, start, end);
+            if (editor is not null && edit is not null)
+            {
+                note.BeginEditingAt(edit.SelectionStart);
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    if (_note != note) return;
+                    editor.Focus();
+                    editor.CaretIndex = edit.SelectionEnd;
+                    editor.SelectionStart = edit.SelectionStart;
+                    editor.SelectionEnd = edit.SelectionEnd;
+                });
+            }
+        }
+        catch (Exception)
+        {
+            if (failure is not null)
+            {
+                failure.Text = "Could not paste image";
+                failure.IsVisible = true;
+            }
+        }
+        finally
+        {
+            _pasteInProgress = false;
         }
     }
 

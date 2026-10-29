@@ -209,11 +209,22 @@ public sealed partial class NoteViewModel : ObservableObject
             return null;
         }
 
+        return InsertImageReference(file, null, selectionStart, selectionEnd);
+    }
+
+    /// <summary>Inserts an already saved clipboard PNG using a neutral description.</summary>
+    public MarkdownEdit? PasteSavedImage(Uri file, int? selectionStart = null, int? selectionEnd = null)
+        => InsertImageReference(file, "imagem", selectionStart, selectionEnd);
+
+    private MarkdownEdit? InsertImageReference(Uri file, string? description, int? selectionStart, int? selectionEnd)
+    {
+        ArgumentNullException.ThrowIfNull(file);
+
         var start = Math.Clamp(selectionStart ?? Content.Length, 0, Content.Length);
         var end = Math.Clamp(selectionEnd ?? start, 0, Content.Length);
         (start, end) = (Math.Min(start, end), Math.Max(start, end));
         var withoutSelection = Content.Remove(start, end - start);
-        var edit = NoteImageReference.Insert(withoutSelection, start, file);
+        var edit = NoteImageReference.Insert(withoutSelection, start, file, description);
         if (edit.Content == withoutSelection)
         {
             return null;
