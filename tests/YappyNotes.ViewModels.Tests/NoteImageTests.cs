@@ -72,6 +72,26 @@ public class NoteImageTests
         Assert.Equal(0, _counting.Updates);
     }
 
+    [Fact]
+    public async Task PressAsync_OnImage_OpensEditorAtImageMarkdownStart()
+    {
+        const string content = "before\n![diagram](file:///tmp/diagram.png)\nafter";
+        var links = new FakeLinkLauncher();
+        var stored = await _notes.CreateAsync(TestContext.Current.CancellationToken);
+        stored.Content = content;
+        var note = new NoteViewModel(stored, _notes, _autoSave, new FakeWindowManager(), links: links);
+
+        await note.PressAsync(note.Lines[1], 0);
+        _clock.Advance(TimeSpan.FromMilliseconds(750));
+        await _autoSave.WhenIdleAsync();
+
+        Assert.True(note.IsEditing);
+        Assert.Equal(content.IndexOf("![", StringComparison.Ordinal), note.EditCaret);
+        Assert.Equal(content, note.Content);
+        Assert.Empty(links.Opened);
+        Assert.Equal(0, _counting.Updates);
+    }
+
     private sealed class ImagePicker(Uri? chosen) : IImageFilePicker
     {
         public Task<Uri?> PickAsync() => Task.FromResult(chosen);

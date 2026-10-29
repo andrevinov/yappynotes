@@ -91,7 +91,7 @@ public partial class NoteWindow : Window
         {
             formattedScroll.PropertyChanged += (_, change) =>
             {
-                if (change.Property == BoundsProperty)
+                if (change.Property == BoundsProperty || change.Property == ScrollViewer.ViewportProperty)
                 {
                     RefreshImages();
                 }
@@ -100,6 +100,16 @@ public partial class NoteWindow : Window
 
         Closed += (_, _) =>
         {
+            if (_imageSession is not null)
+            {
+                _imageSession.Changed -= OnImagesChanged;
+            }
+
+            if (formatted is not null)
+            {
+                formatted.Images = null;
+            }
+
             _imageSession?.Dispose();
             _imageSession = null;
         };
@@ -158,8 +168,25 @@ public partial class NoteWindow : Window
         }
 
         _note = note;
+        var formatted = this.FindControl<FormattedNote>("Formatted");
+        if (_imageSession is not null)
+        {
+            _imageSession.Changed -= OnImagesChanged;
+        }
+
+        if (formatted is not null)
+        {
+            formatted.Images = null;
+        }
+
         _imageSession?.Dispose();
         _imageSession = new NoteImageSession(new LocalImageLoader());
+        _imageSession.Changed += OnImagesChanged;
+        if (formatted is not null)
+        {
+            formatted.Images = _imageSession;
+        }
+
         DataContext = note;
         note.PropertyChanged += OnNoteChanged;
 
@@ -182,6 +209,9 @@ public partial class NoteWindow : Window
 
     internal NoteImageSession? ImageSession => _imageSession;
 
+    private void OnImagesChanged(object? sender, EventArgs e)
+        => this.FindControl<FormattedNote>("Formatted")?.RefreshImages();
+
     private void RefreshImages()
     {
         var scroll = this.FindControl<ScrollViewer>("FormattedScroll");
@@ -191,8 +221,11 @@ public partial class NoteWindow : Window
             return;
         }
 
-        _imageSession.Update(_note.Lines,
-            new Size(Math.Max(1, scroll.Bounds.Width - 16), Math.Max(1, scroll.Bounds.Height - 16)));
+        var viewport = new Size(
+            Math.Max(1, scroll.Viewport.Width > 0 ? scroll.Viewport.Width : scroll.Bounds.Width - 16),
+            Math.Max(1, scroll.Viewport.Height > 0 ? scroll.Viewport.Height : scroll.Bounds.Height - 16));
+        this.FindControl<FormattedNote>("Formatted")!.ImageViewport = viewport;
+        _imageSession.Update(_note.Lines, viewport);
     }
 
     /// <summary>
@@ -537,30 +570,6 @@ public partial class NoteWindow : Window
 
     private void BeginEditingTitle()
     {
-        var formatted = this.FindControl<FormattedNote>("Formatted");
-        if (formatted is not null)
-        {
-            formatted.LinePressed += (_, e) => _ = _note?.PressAsync(e.Line, e.DrawnIndex, e.Trailing);
-        }
-
-        // Presses on the paper around the text: a line would have handled its own.
-        this.FindControl<ScrollViewer>("FormattedScroll")?.AddHandler(
-            PointerPressedEvent,
-            (_, e) =>
-            {
-                if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
-                {
-                    e.Handled = true;
-                    _note?.BeginEditingAtEnd();
-                }
-            });
-
-        var body = this.FindControl<TextBox>("Body");
-        if (body is not null)
-        {
-            body.LostFocus += OnBodyLostFocus;
-        }
-
         var titleBox = this.FindControl<TextBox>("TitleBox");
         if (titleBox is null)
         {

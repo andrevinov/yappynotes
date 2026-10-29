@@ -163,6 +163,12 @@ public sealed partial class NoteViewModel : ObservableObject
     {
         ArgumentNullException.ThrowIfNull(line);
 
+        if (line.Block.Kind == MarkdownBlockKind.Image)
+        {
+            BeginEditing(line.Block.SourceStart);
+            return;
+        }
+
         if (line.IsCheckBoxAt(renderedIndex))
         {
             // The same path as typing, so the save is the same debounced one.
